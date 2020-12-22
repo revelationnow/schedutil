@@ -1,0 +1,133 @@
+#left {
+  display:block;
+  float:left;
+  width:900px;
+  border-style:solid;
+  border-width:1px;
+  border-color:black;
+  background:#883;
+  padding:20px 0px 0px 0px;
+}
+
+#right {
+  display:block;
+  float:left;
+  width:1000px;
+}
+
+#mycanvas {
+}
+
+.input_common {
+}
+
+.div_common {
+  margin:10px 10px 10px 10px;
+  padding:10px 10px 10px 10px;
+  border-style:solid;
+  border-color:gray;
+  border-width:1px;
+}
+
+.div_cores {
+  background:#EE8;
+  margin-bottom:20px;
+}
+
+.div_per_core {
+  background:#F80;
+  margin-bottom:0px
+}
+
+.div_tasks {
+  background:#CCF;
+}
+
+.div_per_task {
+  background:#C8F;
+  margin-bottom:0px
+}
+
+
+.div_per_subtask {
+  background:#84C;
+  margin-bottom:0px
+}
+
+legend {
+  background:#FFFF;
+  border-style:solid;
+  border-width:1px 1px 0px 1px;
+  border-color:gray;
+  padding:2px 4px 2px 4px;
+  position:relative;
+  top:-20px;
+}
+
+.div_cores legend {
+  background:#EE8;
+  color:#000;
+}
+
+.div_per_core legend {
+  background:#F80;
+  color:#000;
+}
+
+.div_tasks legend {
+  background:#CCF;
+  color:#000;
+}
+.div_per_task legend {
+  background:#C8F;
+  color:#000;
+}
+
+.div_per_subtask legend {
+  background:#84C;
+  color:#FFF;
+}
+
+.close_common {
+  top:0px;
+  background:#0008 !important;
+}
+
+.add_button {
+  margin:0px 10px 0px 10px;
+  width:calc(100% - 20px);
+  background:#0008 !important;
+}
+
+*:invalid {
+  color:red;
+}
+
+input[type="checkbox"] {
+  display:none;
+}
+
+input[type="checkbox"] + label span {
+    padding:5px;
+    padding-left:10px;
+    padding-right:10px;
+    width:30px;
+    height:30px;
+    margin: 0 4px 0 0;
+    vertical-align:middle;
+    background: maroon;
+    cursor:pointer;
+    color:white;
+    line-height: 14px;
+    text-align: center;
+    border: solid 1px #000000;
+}
+
+input[type="checkbox"]:checked + label span {
+    background-color:darkgreen;
+    color:white;
+}
+
+input[type="checkbox"]:checked + label {
+    color: green;
+}
