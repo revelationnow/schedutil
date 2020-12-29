@@ -131,3 +131,47 @@ input[type="checkbox"]:checked + label span {
 input[type="checkbox"]:checked + label {
     color: green;
 }
+
+.popup {
+  display: none;
+  position: fixed;
+  padding: 10px;
+  width: 900px;
+  left: calc(50% - 450px);
+  margin-left: -150px;
+  height: 500px;
+  top: calc(50% - 250px);
+  margin-top: -100px;
+  background: #FFF;
+  z-index: 20;
+}
+
+#json_view_popup {
+  -webkit-box-shadow:  0px 0px 0px 9999px rgba(0, 0, 0, 0.5);
+  box-shadow:  0px 0px 0px 9999px rgba(0, 0, 0, 0.5);
+  border:solid;
+}
+
+#json_load_popup {
+  -webkit-box-shadow:  0px 0px 0px 9999px rgba(0, 0, 0, 0.5);
+  box-shadow:  0px 0px 0px 9999px rgba(0, 0, 0, 0.5);
+  border:solid;
+}
+
+#json_view_popup_content {
+  overflow:auto;
+  height:450px;
+}
+
+#json_load_popup_data {
+  overflow:auto;
+}
+
+code {
+  font-family: Consolas,"courier new";
+  color: crimson;
+  background-color: #f1f1f1;
+  padding: 2px;
+  font-size: 105%;
+  white-space: pre-wrap;
+}

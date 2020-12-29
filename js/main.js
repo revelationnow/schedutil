@@ -24,6 +24,21 @@ function get_field_value(div, info_translation, info_resolution_table, field_nam
   return res;
 }
 
+function set_field_value(div, info_translation, info_resolution_table, field_name, value) {
+
+  for(var i = 0; i < info_translation.length; i++) {
+    if(field_name == info_translation[i][0] ) {
+      var field_id = info_translation[i][1];
+      for(var j = 0; j < info_resolution_table.length; j++) {
+        var field_id = field_id.replace(info_resolution_table[j][0],info_resolution_table[j][1]);
+      }
+      $('#' + field_id).val(value);
+      break;
+    }
+  }
+
+}
+
 function add_element(parent, list, new_object, template, translation, self_count, resolution_table) {
 
   new_element_html = update_template(template, translation, resolution_table );
@@ -79,6 +94,7 @@ class CoreList {
     this.resolution_table[0][1] = core_id;
     this.resolution_table[1][1] = 0;
     add_element(this.core_div, this.core_list, new_core, this.core_html_template, this.translation, core_id, this.resolution_table);
+    return core_id;
   }
 
   set_info() {
@@ -94,6 +110,16 @@ class CoreList {
       update_element(this.core_html_template, this.translation, this.resolution_table, this.core_list, i);
     }
   }
+
+  load_json(corelist_json) {
+    this.core_div.empty();
+    this.core_list.splice(0, this.core_list.length);
+    for(var i = 0; i < corelist_json.length; i++) {
+      var core_id = this.add_core();
+      this.core_list[core_id][0].load_json(corelist_json[i]);
+    }
+  }
+
 
   generate_corelist_json() {
     var json = '"CoreList" : [';
@@ -131,6 +157,18 @@ class Core {
 
   set_id(id) {
     this.core_id = id;
+  }
+
+  load_json(core_json, core_div) {
+    this.core_name = core_json.CoreName;
+    this.clock_freq = core_json.CoreFreq;
+    this.ctxt_switch_latency = core_json.CoreCtxtLat;
+
+    this.info_resolution[0][1] = this.core_id;
+    set_field_value(core_div, this.info_translation, this.info_resolution, "core_name", this.core_name);
+    set_field_value(core_div, this.info_translation, this.info_resolution, "clock_freq", this.clock_freq);
+    set_field_value(core_div, this.info_translation, this.info_resolution, "ctxt_switch_latency", this.ctxt_switch_latency);
+
   }
 
   generate_core_json() {
@@ -173,11 +211,28 @@ class TaskList {
     this.resolution_table[1][1] = 0;
     add_element(this.tasklist_div, this.task_list, new_task, this.task_html_template, this.translation, this.task_list.length, this.resolution_table);
     new_task.set_subtask_div( $("#task_" + task_id + "_subtask_box"));
+    return task_id;
   }
 
   set_info() {
     for(var i = 0; i < this.task_list.length; i++) {
       this.task_list[i][0].set_task_info(this.task_list[i][1]);
+    }
+  }
+
+  load_json(tasklist_json, coreaffinity_list) {
+    this.tasklist_div.empty();
+
+    for(var i = 0; i < this.task_list.length; i++) {
+      this.task_list[i][0].clear();
+    }
+
+    this.task_list.splice(0, this.task_list.length);
+
+    for(var i = 0; i < tasklist_json.length; i++) {
+      var task_id = this.add_task();
+      this.task_list[task_id][0].load_json(tasklist_json[i], coreaffinity_list);
+
     }
   }
 
@@ -296,6 +351,7 @@ class Task {
     this.resolution_table[0][1] = subtask_id;
     this.resolution_table[1][1] = this.task_id;
     add_element(this.subtask_list_div, this.subtask_list, new_subtask, this.subtask_html_template, this.translation, subtask_id, this.resolution_table);
+    new_subtask.set_parent_id(this.task_id);
     new_subtask.set_dependency_div( $("#task_" + this.task_id + "_subtask_" + subtask_id + "_deps") );
     new_subtask.add_all_dependencies(subtask_id);
     new_subtask.set_coreaffinity_div($("#task_"+ this.task_id + "_subtask_" + subtask_id + "_coreaffinity_list"));
@@ -303,6 +359,7 @@ class Task {
     for(var i = 0; i < subtask_id; i++) {
       this.subtask_list[i][0].update_new_dependencies(subtask_id);
     }
+    return subtask_id;
   }
 
   remove_subtask(subtask_number, coreaffinity_list) {
@@ -327,6 +384,29 @@ class Task {
     }
     json = json + ']';
     return json;
+  }
+
+  clear() {
+    this.dependency_list_div.empty();
+    this.coreaffinity_list_div.empty();
+    this.dependency_list.splice(0, this.dependency_list.length);
+    this.coreaffinity_list.splice(0, this.coreaffinity_list.length);
+  }
+
+  load_json(task_json, coreaffinity_list) {
+    this.task_name = task_json.TaskName;
+    this.periodicity = task_json.TaskPeriod;
+    for(var i = 0; i < task_json.SubtaskList.length; i++) {
+      var subtask_id = this.add_subtask(coreaffinity_list);
+      this.subtask_list[subtask_id][0].load_json(task_json.SubtaskList[i], coreaffinity_list);
+    }
+
+    for(var i = 0; i < this.subtask_list.length; i++) {
+      this.subtask_list[i][0].update_dependency_state(task_json.SubtaskList[i]);
+    }
+    this.info_resolution[0][1] = this.task_id;
+    set_field_value(this.task_div, this.info_translation, this.info_resolution, "task_name", this.task_name);
+    set_field_value(this.task_div, this.info_translation, this.info_resolution, "periodicity",this.periodicity);
   }
 }
 
@@ -380,11 +460,8 @@ class SubTask {
   set_subtask_info(subtask_div) {
     this.info_resolution[0][1] = this.subtask_id;
     this.info_resolution[1][1] = this.parent_task_id;
-    console.log("Test");
     this.subtask_name = get_field_value(subtask_div, this.info_translation, this.info_resolution, "subtask_name");
-    console.log("Subtask Name : " + this.subtask_name);
     this.deadline     = get_field_value(subtask_div, this.info_translation, this.info_resolution, "deadline");
-    console.log("Subtask Name : " + this.deadline);
     this.execution_time = get_field_value(subtask_div, this.info_translation, this.info_resolution, "execution_time");
     this.mem_size       = get_field_value(subtask_div, this.info_translation, this.info_resolution, "mem_size");
     this.earliest_start = get_field_value(subtask_div, this.info_translation, this.info_resolution, "earliest_start");
@@ -460,6 +537,43 @@ class SubTask {
     add_element(this.dependency_list_div, this.dependency_list, new Dependency() , this.dependency_html_template, this.translation, this.dependency_list.length, this.resolution_table);
   }
 
+  load_json(subtask_json, coreaffinity_list) {
+    this.subtask_name = subtask_json.SubtaskName;
+    this.deadline = subtask_json.SubtaskDeadline;
+    this.execution_time = subtask_json.SubtaskExecTime;
+    this.mem_size = subtask_json.SubtaskMemory;
+    this.earliest_start = subtask_json.SubtaskEarliestStart;
+
+    this.info_resolution[0][1] = this.subtask_id;
+    this.info_resolution[1][1] = this.parent_task_id;
+    set_field_value(this.subtask_div, this.info_translation, this.info_resolution, "subtask_name", this.subtask_name);
+    set_field_value(this.subtask_div, this.info_translation, this.info_resolution, "deadline", this.deadline);
+    set_field_value(this.subtask_div, this.info_translation, this.info_resolution, "execution_time", this.execution_time);
+    set_field_value(this.subtask_div, this.info_translation, this.info_resolution, "mem_size",this.mem_size);
+    set_field_value(this.subtask_div, this.info_translation, this.info_resolution, "earliest_start", this.earliest_start);
+
+    if(subtask_json.CoreList.length != 0) {
+      for(var i = 0; i < this.coreaffinity_list.length; i++) {
+        this.coreaffinity_list[i][1].prop('checked', false);
+      }
+
+      for(var i = 0; i < subtask_json.CoreList.length; i++) {
+        var coreaffinity_id = parseInt(subtask_json.CoreList[i]);
+        this.coreaffinity_list[coreaffinity_id][1].prop('checked', true);
+      }
+    }
+  }
+
+  update_dependency_state(subtask_json) {
+    for(var i = 0; i < subtask_json.DependencyList.length; i++) {
+      var dep_id = parseInt(subtask_json.DependencyList[i]);
+      if(dep_id > this.subtask_id) {
+        dep_id = dep_id - 1;
+      }
+      this.dependency_list[dep_id][1].prop('checked',true);
+    }
+  }
+
 }
 
 
@@ -519,7 +633,41 @@ class Scheduler {
   generate_schedule_json() {
     this.corelist.set_info();
     this.tasklist.set_info();
-    console.log('{' + this.corelist.generate_corelist_json() + ',' + this.tasklist.generate_tasklist_json() + '}');
+    var json = '{' + this.corelist.generate_corelist_json() + ',' + this.tasklist.generate_tasklist_json() + '}';
+    console.log(json);
+    return json;
+
+  }
+
+  show_json_view() {
+    var json = this.generate_schedule_json();
+    var json_pretty = JSON.stringify(JSON.parse(json),null,4);
+    $("#json_view_popup_content").html('<code>' + json_pretty + '</code>');
+    $("#json_view_popup").show();
+  }
+
+  hide_json_view() {
+    $("#json_view_popup").hide();
+  }
+
+  show_json_load() {
+    $("#json_load_popup").show();
+  }
+
+  hide_json_load() {
+    $("#json_load_popup").hide();
+  }
+
+  load_json() {
+    var res = confirm("Any existing content will be cleared and overwritten");
+
+    if(res == true) {
+      var json = JSON.parse($("#json_load_popup_data").val());
+      console.log(json);
+      this.corelist.load_json(json.CoreList);
+      this.tasklist.load_json(json.TaskList, this.corelist);
+      this.hide_json_load();
+    }
   }
 }
 
@@ -531,7 +679,28 @@ function init()
 
   $("#update").on("click", function(e) {
     scheduler.generate_schedule_json();
-  })
+  });
+
+  $("#show_json").on("click", function(e) {
+    scheduler.show_json_view();
+  });
+
+  $("#json_view_popup_close").on("click", function(e) {
+    scheduler.hide_json_view();
+  });
+
+  $("#load_json").on("click", function(e) {
+    scheduler.show_json_load();
+  });
+
+  $("#json_load_popup_close").on("click", function(e) {
+    scheduler.hide_json_load();
+  });
+
+  $("#json_load_popup_update").on("click", function(e) {
+    scheduler.load_json();
+  });
+
 
   $("#add_core_button").on("click", function (e) {
     scheduler.add_core();
