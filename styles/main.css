@@ -115,9 +115,9 @@ input[type="checkbox"] + label span {
     height:30px;
     margin: 0 4px 0 0;
     vertical-align:middle;
-    background: maroon;
+    background: darkgray;
     cursor:pointer;
-    color:white;
+    color:#222;
     line-height: 14px;
     text-align: center;
     border: solid 1px #000000;

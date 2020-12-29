@@ -9,6 +9,21 @@ function update_template(template, translation, resolution_table) {
   return template;
 }
 
+function get_field_value(div, info_translation, info_resolution_table, field_name) {
+  var res = "";
+  for(var i = 0; i < info_translation.length; i++) {
+    if(field_name == info_translation[i][0] ) {
+      var field_id = info_translation[i][1];
+      for(var j = 0; j < info_resolution_table.length; j++) {
+        var field_id = field_id.replace(info_resolution_table[j][0],info_resolution_table[j][1]);
+      }
+      res = $('#' + field_id).val();
+      break;
+    }
+  }
+  return res;
+}
+
 function add_element(parent, list, new_object, template, translation, self_count, resolution_table) {
 
   new_element_html = update_template(template, translation, resolution_table );
@@ -41,8 +56,8 @@ class CoreList {
     this.core_html_template = '<div id="xxxx_id_field_xxxx" class="w3-display-container div_common div_per_core" data-index="xxxx_data_index_xxxx">' +
 '          <legend>xxxx_legend_field_xxxx</legend>' +
 '          <input type="button" id="xxxx_close_button_xxxx" class="w3-button w3-black w3-display-topright w3-black close_common close_core" value="&times"></input>' +
-'          <input id="xxxx_text_field_xxxx" class="input_common core_input" placeholder="Enter Core Name"></input>' +
-'          <input id="xxxx_freq_field_xxxx" class="input_common core_clock" placeholder="Enter Core Freq (MHz)" pattern="[0-9]+(.?[0-9]+)?"></input>' +
+'          <input id="xxxx_text_field_xxxx" class="input_common core_input" placeholder="Core Name"></input>' +
+'          <input id="xxxx_freq_field_xxxx" class="input_common core_clock" placeholder="Core Freq (MHz)" pattern="[0-9]+(.?[0-9]+)?"></input>' +
 '          <input id="xxxx_latency_field_xxxx" class="input_common core_latency" placeholder="Context Switch Latency (cycles)" type="number"></input>' +
 '        </div>';
     this.core_div = $("#core_box");
@@ -60,9 +75,16 @@ class CoreList {
 
   add_core() {
     var new_core = new Core();
-    this.resolution_table[0][1] = this.core_list.length;
+    var core_id = this.core_list.length;
+    this.resolution_table[0][1] = core_id;
     this.resolution_table[1][1] = 0;
-    add_element(this.core_div, this.core_list, new_core, this.core_html_template, this.translation, this.core_list.length, this.resolution_table);
+    add_element(this.core_div, this.core_list, new_core, this.core_html_template, this.translation, core_id, this.resolution_table);
+  }
+
+  set_info() {
+    for(var i = 0; i < this.core_list.length; i++) {
+      this.core_list[i][0].set_core_info(this.core_list[i][1]);
+    }
   }
 
   remove_core(core_number) {
@@ -72,6 +94,18 @@ class CoreList {
       update_element(this.core_html_template, this.translation, this.resolution_table, this.core_list, i);
     }
   }
+
+  generate_corelist_json() {
+    var json = '"CoreList" : [';
+    for(var i = 0; i < this.core_list.length; i++) {
+      json = json + '{' + this.core_list[i][0].generate_core_json() + '}';
+      if (i != this.core_list.length - 1) {
+        json = json + ',';
+      }
+    }
+    json = json + ']';
+    return json;
+  }
 }
 
 class Core {
@@ -80,17 +114,28 @@ class Core {
     this.clock_freq = 0;
     this.ctxt_switch_latency = 0;
     this.core_id = 0;
+    this.info_translation = [["core_name","core_XXXXELEMENTNUMBERXXXX_text"],
+      ["clock_freq","core_XXXXELEMENTNUMBERXXXX_freq"],
+      ["ctxt_switch_latency","core_XXXXELEMENTNUMBERXXXX_ctx_latency"]
+    ];
+    this.info_resolution = [["XXXXELEMENTNUMBERXXXX",""],
+                            ["XXXXPARENTELEMENTNUMBERXXXX","0"]]
   }
 
-  set_core_info(name, freq, latency, id) {
-    this.core_id = id;
-    this.core_name = name;
-    this.clock_freq = freq;
-    this.ctxt_switch_latency = latency;
+  set_core_info(core_div) {
+    this.info_resolution[0][1] = this.core_id;
+    this.core_name = get_field_value(core_div, this.info_translation, this.info_resolution, "core_name");
+    this.clock_freq = get_field_value(core_div, this.info_translation, this.info_resolution, "clock_freq");
+    this.ctxt_switch_latency = get_field_value(core_div, this.info_translation, this.info_resolution, "ctxt_switch_latency");
   }
 
   set_id(id) {
     this.core_id = id;
+  }
+
+  generate_core_json() {
+    var json = '"CoreName": "' + this.core_name + '","CoreFreq": "' + this.clock_freq + '","CoreCtxtLat":"' + this.ctxt_switch_latency + '"';
+    return json;
   }
 }
 
@@ -111,8 +156,8 @@ class TaskList {
     this.task_html_template = '<div id="xxxx_id_field_xxxx" class="w3-display-container div_common div_per_task" data-index="xxxx_data_index_xxxx">' +
           '  <legend>xxxx_legend_field_xxxx</legend>' +
           '  <input type="button" id="xxxx_close_button_xxxx" class="w3-button w3-black w3-display-topright w3-black close_common close_task" value="&times"></input>' +
-          '  <input id="xxxx_text_field_xxxx"   class="input_common input_task"  placeholder="Enter Task Name"></input>' +
-          '  <input id="xxxx_period_field_xxxx" class="input_common input_task" placeholder="Enter Task Periodicity (us)" type="number"></input>' +
+          '  <input id="xxxx_text_field_xxxx"   class="input_common input_task"  placeholder="Task Name"></input>' +
+          '  <input id="xxxx_period_field_xxxx" class="input_common input_task" placeholder="Task Periodicity (us)" type="number"></input>' +
           '  <div id="xxxx_subtask_field_xxxx">' +
           '  </div>' +
           '  <input type="button" id="xxxx_subtask_btn_field_xxxx" class="w3-button w3-block w3-ripple w3-black add_button add_subtask_button" value="Add Subtask"></input>' +
@@ -130,8 +175,14 @@ class TaskList {
     new_task.set_subtask_div( $("#task_" + task_id + "_subtask_box"));
   }
 
-  add_subtask(task_number) {
-    this.task_list[task_number][0].add_subtask();
+  set_info() {
+    for(var i = 0; i < this.task_list.length; i++) {
+      this.task_list[i][0].set_task_info(this.task_list[i][1]);
+    }
+  }
+
+  add_subtask(task_number, coreaffinity_list) {
+    this.task_list[task_number][0].add_subtask(coreaffinity_list);
   }
 
   remove_task(task_number) {
@@ -142,9 +193,27 @@ class TaskList {
     }
   }
 
-  remove_subtask(task_number, subtask_number) {
-    this.task_list[task_number][0].remove_subtask(subtask_number);
+  remove_subtask(task_number, subtask_number, coreaffinity_list) {
+    this.task_list[task_number][0].remove_subtask(subtask_number, coreaffinity_list);
 
+  }
+
+  update_all_subtask_coreaffinity(coreaffinity_list) {
+    for(var i = 0; i < this.task_list.length; i++) {
+      this.task_list[i][0].update_all_subtask_coreaffinity( coreaffinity_list);
+    }
+  }
+
+  generate_tasklist_json() {
+    var json = '"TaskList" : [';
+    for(var i = 0; i < this.task_list.length; i++) {
+      json = json + '{' + this.task_list[i][0].generate_task_json() + '}';
+      if (i != this.task_list.length - 1) {
+        json = json + ',';
+      }
+    }
+    json = json + ']';
+    return json;
   }
 }
 
@@ -164,24 +233,45 @@ class Task {
                          ["xxxx_parent_index_xxxx", "XXXXPARENTELEMENTNUMBERXXXX"],
                          ["xxxx_text_field_xxxx", "task_XXXXPARENTELEMENTNUMBERXXXX_subtask_XXXXELEMENTNUMBERXXXX_text"],
                          ["xxxx_deadline_field_xxxx", "task_XXXXPARENTELEMENTNUMBERXXXX_subtask_XXXXELEMENTNUMBERXXXX_deadline"],
+                         ["xxxx_memsize_field_xxxx", "task_XXXXPARENTELEMENTNUMBERXXXX_subtask_XXXXELEMENTNUMBERXXXX_memsize"],
                          ["xxxx_exec_time_field_xxxx", "task_XXXXPARENTELEMENTNUMBERXXXX_subtask_XXXXELEMENTNUMBERXXXX_exectime"],
-                         ["xxxx_deps_field_xxxx", "task_XXXXPARENTELEMENTNUMBERXXXX_subtask_XXXXELEMENTNUMBERXXXX_deps"]
+                         ["xxxx_earliest_start_field_xxxx", "task_XXXXPARENTELEMENTNUMBERXXXX_subtask_XXXXELEMENTNUMBERXXXX_earliest_start"],
+                         ["xxxx_deps_field_xxxx", "task_XXXXPARENTELEMENTNUMBERXXXX_subtask_XXXXELEMENTNUMBERXXXX_deps"],
+                         ["xxxx_coreaffinity_list_field_xxxx", "task_XXXXPARENTELEMENTNUMBERXXXX_subtask_XXXXELEMENTNUMBERXXXX_coreaffinity_list"]
     ];
     this.subtask_html_template = '<div id="xxxx_id_field_xxxx" class="w3-display-container div_common div_per_subtask" data-index="xxxx_data_index_xxxx" data-parentindex="xxxx_parent_index_xxxx">' +
                 '<legend>xxxx_legend_field_xxxx</legend>' +
                 '<input type="button" id="xxxx_close_button_xxxx" class="w3-button w3-black w3-display-topright w3-black close_common close_subtask" value="&times"></input>' +
-                '<input id="xxxx_text_field_xxxx" class="input_common input_subtask" placeholder="Enter Subtask Name"></input>' +
-                '<input id="xxxx_deadline_field_xxxx" class="input_common input_subtask" placeholder="Enter Subtask deadline (us)" type="number"></input>' +
-                '<input id="xxxx_exec_time_field_xxxx" class="input_common input_subtask" placeholder="Enter execution time (cycles)" type="number"></input>' +
+                '<input id="xxxx_text_field_xxxx" class="input_common input_subtask" placeholder="Subtask Name"></input>' +
+                '<input id="xxxx_deadline_field_xxxx" class="input_common input_subtask" placeholder="Subtask deadline (us)" type="number"></input>' +
+                '<input id="xxxx_memsize_field_xxxx" class="input_common input_subtask" placeholder="Input memory size (bytes)" type="number"></input>' +
+                '<input id="xxxx_exec_time_field_xxxx" class="input_common input_subtask" placeholder="Execution time (cycles)" type="number"></input>' +
+                '<input id="xxxx_earliest_start_field_xxxx" class="input_common input_subtask" placeholder="Earliest start time (us)" type="number"></input>' +
                 '<div id="xxxx_deps_field_xxxx" class="div_common">' +
-                '<legend>Dependencies</legend>'
+                '<legend>Dependencies</legend>' +
+                '</div>' +
+                '<div id="xxxx_coreaffinity_list_field_xxxx" class="div_common">' +
+                '<legend>Core Affinity</legend>' +
                 '</div>' +
               '</div>';
     this.resolution_table = [["XXXXELEMENTNUMBERXXXX",""],
                              ["XXXXPARENTELEMENTNUMBERXXXX",""]];
+    this.info_translation = [["task_name","task_XXXXELEMENTNUMBERXXXX_text"],
+                             ["periodicity","task_XXXXELEMENTNUMBERXXXX_period"]
+    ];
+    this.info_resolution = [["XXXXELEMENTNUMBERXXXX",""],
+                            ["XXXXPARENTELEMENTNUMBERXXXX","0"]]
   }
 
-  set_task_info() {
+  set_task_info(task_div) {
+    this.info_resolution[0][1] = this.task_id;
+    this.task_name = get_field_value(task_div, this.info_translation, this.info_resolution, "task_name");
+    this.periodicity = get_field_value(task_div, this.info_translation, this.info_resolution, "periodicity");
+    console.log("Num subtasks : " + this.subtask_list.length);
+    for(var i = 0; i < this.subtask_list.length; i++) {
+      this.subtask_list[i][0].set_subtask_info(this.subtask_list[i][1]);
+    }
+
   }
 
   set_id(id) {
@@ -192,29 +282,51 @@ class Task {
     this.subtask_list_div = subtask_div;
   }
 
-  add_subtask() {
+  update_all_subtask_coreaffinity(coreaffinity_list) {
+    for(var i = 0; i < this.subtask_list.length; i++) {
+      this.subtask_list[i][0].remove_all_core_affinity();
+      this.subtask_list[i][0].add_coreaffinity_list(coreaffinity_list);
+    }
+  }
+
+
+  add_subtask(coreaffinity_list) {
     var new_subtask = new SubTask();
     var subtask_id = this.subtask_list.length;
     this.resolution_table[0][1] = subtask_id;
     this.resolution_table[1][1] = this.task_id;
     add_element(this.subtask_list_div, this.subtask_list, new_subtask, this.subtask_html_template, this.translation, subtask_id, this.resolution_table);
-    new_subtask.set_dependency_div( $("#task_" + this.task_id +  "_subtask_" + subtask_id + "_deps") );
+    new_subtask.set_dependency_div( $("#task_" + this.task_id + "_subtask_" + subtask_id + "_deps") );
     new_subtask.add_all_dependencies(subtask_id);
+    new_subtask.set_coreaffinity_div($("#task_"+ this.task_id + "_subtask_" + subtask_id + "_coreaffinity_list"));
+    new_subtask.add_coreaffinity_list(coreaffinity_list);
     for(var i = 0; i < subtask_id; i++) {
       this.subtask_list[i][0].update_new_dependencies(subtask_id);
     }
   }
 
-
-
-  remove_subtask(subtask_number) {
+  remove_subtask(subtask_number, coreaffinity_list) {
     remove_element(subtask_number, this.subtask_list);
     for(var i = 0; i < this.subtask_list.length; i++) {
       this.resolution_table[0][1] = i;
       update_element(this.subtask_html_template, this.translation, this.resolution_table, this.subtask_list, i);
       this.subtask_list[i][0].set_dependency_div($("#task_" + this.task_id +  "_subtask_" + i + "_deps") );
       this.subtask_list[i][0].add_all_dependencies(this.subtask_list.length);
+      this.subtask_list[i][0].set_coreaffinity_div($("#task_"+ this.task_id + "_subtask_" + i + "_coreaffinity_list"));
+      this.subtask_list[i][0].add_coreaffinity_list(coreaffinity_list);
     }
+  }
+
+  generate_task_json() {
+    var json = '"TaskName": "' + this.task_name + '","TaskPeriod": "' + this.periodicity + '","SubtaskList":[';
+    for(var i = 0; i < this.subtask_list.length; i++)    {
+      json = json + '{' + this.subtask_list[i][0].generate_subtask_json() + '}';
+      if (i != this.subtask_list.length - 1) {
+        json += ',';
+      }
+    }
+    json = json + ']';
+    return json;
   }
 }
 
@@ -224,22 +336,59 @@ class SubTask {
     this.deadline = "";
     this.execution_time= "";
     this.parent_task_id = 0;
+    this.mem_size = "";
     this.subtask_id = 0;
     this.dependency_list = [];
     this.dependency_list_div = "";
+    this.coreaffinity_list = [];
+    this.coreaffinity_list_div = "";
     this.translation = [["xxxx_dep_input_field_xxxx","tXXXXPARENTELEMENTNUMBERXXXX_stXXXXELEMENTNUMBERXXXX_dXXXXDEPNUMBERXXXX_input"],
       ["xxxx_dep_label_field_xxxx","tXXXXPARENTELEMENTNUMBERXXXX_stXXXXELEMENTNUMBERXXXX_dXXXXDEPNUMBERXXXX_input"],
-      ["xxxx_dep_number_field_xxxx","XXXXDEPNUMBERXXXX"]
+      ["xxxx_dep_number_field_xxxx","XXXXDEPNUMBERXXXX"],
+      ["xxxx_dep_index_field_xxxx","XXXXDEPNUMBERXXXX"],
+      ["xxxx_coreaffinity_input_field_xxxx","tXXXXPARENTELEMENTNUMBERXXXX_stXXXXELEMENTNUMBERXXXX_caXXXXCOREAFFINITYNUMBERXXXX_input"],
+      ["xxxx_coreaffinity_label_field_xxxx","tXXXXPARENTELEMENTNUMBERXXXX_stXXXXELEMENTNUMBERXXXX_caXXXXCOREAFFINITYNUMBERXXXX_input"],
+      ["xxxx_coreaffinity_number_field_xxxx","XXXXCOREAFFINITYNUMBERXXXX"],
+      ["xxxx_coreaffinity_index_xxxx","XXXXCOREAFFINITYNUMBERXXXX"]
     ];
-    this.dependency_html_template = '<input id="xxxx_dep_input_field_xxxx" type="checkbox"></input>' +
+    this.dependency_html_template = '<input id="xxxx_dep_input_field_xxxx" type="checkbox" data-index="xxxx_dep_index_field_xxxx"></input>' +
                   '<label for="xxxx_dep_label_field_xxxx"><span>xxxx_dep_number_field_xxxx</span></label>';
     this.resolution_table = [["XXXXELEMENTNUMBERXXXX",""],
                              ["XXXXPARENTELEMENTNUMBERXXXX",""],
-                             ["XXXXDEPNUMBERXXXX",""]];
+                             ["XXXXDEPNUMBERXXXX",""],
+                             ["XXXXCOREAFFINITYNUMBERXXXX",""]
+    ];
+    this.info_translation = [["subtask_name","task_XXXXPARENTELEMENTNUMBERXXXX_subtask_XXXXELEMENTNUMBERXXXX_text"],
+                             ["deadline","task_XXXXPARENTELEMENTNUMBERXXXX_subtask_XXXXELEMENTNUMBERXXXX_deadline"],
+                             ["execution_time","task_XXXXPARENTELEMENTNUMBERXXXX_subtask_XXXXELEMENTNUMBERXXXX_exectime"],
+                             ["earliest_start","task_XXXXPARENTELEMENTNUMBERXXXX_subtask_XXXXELEMENTNUMBERXXXX_earliest_start"],
+                             ["parent_task_id","XXXXPARENTELEMENTNUMBERXXXX"],
+                             ["mem_size","task_XXXXPARENTELEMENTNUMBERXXXX_subtask_XXXXELEMENTNUMBERXXXX_memsize"]
+    ];
+
+    this.info_resolution = [["XXXXELEMENTNUMBERXXXX",""],
+                            ["XXXXPARENTELEMENTNUMBERXXXX","0"]]
+    this.coreaffinity_html_template = '<input id="xxxx_coreaffinity_input_field_xxxx" type="checkbox" data-index="xxxx_coreaffinity_index_xxxx" checked></input>' +
+                  '<label for="xxxx_coreaffinity_label_field_xxxx"><span>xxxx_coreaffinity_number_field_xxxx</span></label>';
+
   }
 
   set_id(id) {
     this.subtask_id = id;
+  }
+
+  set_subtask_info(subtask_div) {
+    this.info_resolution[0][1] = this.subtask_id;
+    this.info_resolution[1][1] = this.parent_task_id;
+    console.log("Test");
+    this.subtask_name = get_field_value(subtask_div, this.info_translation, this.info_resolution, "subtask_name");
+    console.log("Subtask Name : " + this.subtask_name);
+    this.deadline     = get_field_value(subtask_div, this.info_translation, this.info_resolution, "deadline");
+    console.log("Subtask Name : " + this.deadline);
+    this.execution_time = get_field_value(subtask_div, this.info_translation, this.info_resolution, "execution_time");
+    this.mem_size       = get_field_value(subtask_div, this.info_translation, this.info_resolution, "mem_size");
+    this.earliest_start = get_field_value(subtask_div, this.info_translation, this.info_resolution, "earliest_start");
+
   }
 
   set_parent_id(id) {
@@ -248,6 +397,24 @@ class SubTask {
 
   set_dependency_div(depdendency_div) {
     this.dependency_list_div = depdendency_div;
+  }
+
+  set_coreaffinity_div(coreaffinity_div) {
+    this.coreaffinity_list_div = coreaffinity_div;
+  }
+
+  add_coreaffinity_list(coreaffinity_list) {
+    for(var i = 0; i < coreaffinity_list.core_list.length; i++) {
+      this.resolution_table[0][1] = this.subtask_id;
+      this.resolution_table[1][1] = this.parent_task_id;
+      this.resolution_table[3][1] = coreaffinity_list.core_list[i][0].core_id;
+      add_element(this.coreaffinity_list_div, this.coreaffinity_list, new CoreAffinity(), this.coreaffinity_html_template, this.translation, i, this.resolution_table);
+    }
+  }
+
+  remove_all_core_affinity() {
+    this.coreaffinity_list_div.empty();
+    this.coreaffinity_list.splice(0, this.coreaffinity_list.length);
   }
 
   add_all_dependencies(last_subtask) {
@@ -261,6 +428,31 @@ class SubTask {
     }
   }
 
+  generate_subtask_json() {
+    var json = '"SubtaskName": "' + this.subtask_name + '","SubtaskDeadline": "' + this.deadline + '","SubtaskMemory":"' + this.mem_size + '","SubtaskExecTime":"' + this.execution_time + '", "EarliestStart": "' + this.earliest_start + '","DependencyList":[';
+    for(var i = 0; i < this.dependency_list.length; i++) {
+      if(this.dependency_list[i][1].is(":checked")) {
+        json = json + '"' + this.dependency_list[i][1].data("index") + '"';
+        if((i != this.dependency_list.length - 1) && (this.dependency_list[i+1][1].is(":checked"))) {
+          json = json + ',';
+        }
+      }
+    }
+    json += '],"CoreList":[';
+    for(var i = 0; i < this.coreaffinity_list.length; i++) {
+      if(this.coreaffinity_list[i][1].is(":checked")) {
+        json = json + '"' + this.coreaffinity_list[i][1].data("index") + '"';
+        if((i != this.coreaffinity_list.length - 1) && (this.coreaffinity_list[i+1][1].is(":checked"))) {
+          json = json + ',';
+        }
+      }
+    }
+
+    json += ']';
+
+    return json;
+  }
+
   update_new_dependencies(last_subtask) {
     this.resolution_table[0][1] = this.subtask_id;
     this.resolution_table[1][1] = this.parent_task_id;
@@ -268,8 +460,6 @@ class SubTask {
     add_element(this.dependency_list_div, this.dependency_list, new Dependency() , this.dependency_html_template, this.translation, this.dependency_list.length, this.resolution_table);
   }
 
-  set_subtask_info() {
-  }
 }
 
 
@@ -279,39 +469,92 @@ class Dependency {
   }
 
   set_id(id) {
-    this.depdendency_div = id;
+    this.depdendency_id = id;
   }
 }
-var corelist;
-var tasklist;
+
+class CoreAffinity {
+  constructor() {
+    this.coreaffinity_id = 0;
+  }
+
+  set_id(id) {
+    this.coreaffinity_id = id;
+  }
+}
+
+
+class Scheduler {
+  constructor () {
+    this.corelist = new CoreList();
+    this.tasklist = new TaskList();
+  }
+
+  add_core() {
+    this.corelist.add_core();
+    this.tasklist.update_all_subtask_coreaffinity(this.corelist);
+  }
+
+  remove_core(corenum) {
+    this.corelist.remove_core(corenum);
+    this.tasklist.update_all_subtask_coreaffinity(this.corelist);
+  }
+
+  add_task() {
+    this.tasklist.add_task();
+  }
+
+  remove_task(tasknum) {
+    this.tasklist.remove_task(tasknum);
+  }
+
+  add_subtask(tasknum) {
+    this.tasklist.add_subtask(tasknum, this.corelist);
+  }
+
+  remove_subtask(tasknum, subtasknum) {
+    this.tasklist.remove_subtask(tasknum, subtasknum, this.corelist);
+  }
+
+  generate_schedule_json() {
+    this.corelist.set_info();
+    this.tasklist.set_info();
+    console.log('{' + this.corelist.generate_corelist_json() + ',' + this.tasklist.generate_tasklist_json() + '}');
+  }
+}
+
+var scheduler;
 
 function init()
 {
-  corelist = new CoreList();
-  tasklist = new TaskList();
+  scheduler = new Scheduler();
+
+  $("#update").on("click", function(e) {
+    scheduler.generate_schedule_json();
+  })
 
   $("#add_core_button").on("click", function (e) {
-    corelist.add_core();
+    scheduler.add_core();
   });
 
   $("#core_box").on("click", ".close_core", function(e) {
-    corelist.remove_core(parseInt($(this).parent().data("index")));
+    scheduler.remove_core(parseInt($(this).parent().data("index")));
   });
 
   $("#add_task_button").on("click", function (e) {
-    tasklist.add_task();
+    scheduler.add_task();
   });
 
   $("#task_box").on("click", ".close_task", function(e) {
-    tasklist.remove_task(parseInt($(this).parent().data("index")));
+    scheduler.remove_task(parseInt($(this).parent().data("index")));
   });
 
   $("#task_box").on("click", ".add_subtask_button", function(e) {
-    tasklist.add_subtask(parseInt($(this).parent().data("index")));
+    scheduler.add_subtask(parseInt($(this).parent().data("index")));
   });
 
   $("#task_box").on("click", ".close_subtask", function(e) {
-    tasklist.remove_subtask(parseInt($(this).parent().data("parentindex")), parseInt($(this).parent().data("index")));
+    scheduler.remove_subtask(parseInt($(this).parent().data("parentindex")), parseInt($(this).parent().data("index")));
   });
 
 /*  $(".task_input").on('keyup', function(e) {
