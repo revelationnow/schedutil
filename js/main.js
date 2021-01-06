@@ -220,19 +220,20 @@ class TaskList {
     }
   }
 
-  load_json(tasklist_json, coreaffinity_list) {
-    this.tasklist_div.empty();
-
+  clear() {
     for(var i = 0; i < this.task_list.length; i++) {
       this.task_list[i][0].clear();
     }
-
+    this.tasklist_div.empty();
     this.task_list.splice(0, this.task_list.length);
+  }
+
+  load_json(tasklist_json, coreaffinity_list) {
+    this.clear();
 
     for(var i = 0; i < tasklist_json.length; i++) {
       var task_id = this.add_task();
       this.task_list[task_id][0].load_json(tasklist_json[i], coreaffinity_list);
-
     }
   }
 
@@ -269,6 +270,14 @@ class TaskList {
     }
     json = json + ']';
     return json;
+  }
+
+  build_dependency_tree() {
+    // Use adjacency List
+    this.adjacency_lists = [];
+    for(var i = 0; i < this.task_list.length; i++) {
+      this.adjacency_lists.push([]);
+    }
   }
 }
 
@@ -387,10 +396,11 @@ class Task {
   }
 
   clear() {
-    this.dependency_list_div.empty();
-    this.coreaffinity_list_div.empty();
-    this.dependency_list.splice(0, this.dependency_list.length);
-    this.coreaffinity_list.splice(0, this.coreaffinity_list.length);
+    for(var i = 0; i < this.subtask_list.length; i++) {
+      this.subtask_list[i][0].clear();
+    }
+    this.subtask_list_div.empty();
+    this.subtask_list.splice(0, this.subtask_list.length);
   }
 
   load_json(task_json, coreaffinity_list) {
@@ -457,6 +467,13 @@ class SubTask {
     this.subtask_id = id;
   }
 
+  clear() {
+    this.dependency_list_div.empty();
+    this.coreaffinity_list_div.empty();
+    this.dependency_list.splice(0, this.dependency_list.length);
+    this.coreaffinity_list.splice(0, this.coreaffinity_list.length);
+  }
+
   set_subtask_info(subtask_div) {
     this.info_resolution[0][1] = this.subtask_id;
     this.info_resolution[1][1] = this.parent_task_id;
@@ -465,6 +482,13 @@ class SubTask {
     this.execution_time = get_field_value(subtask_div, this.info_translation, this.info_resolution, "execution_time");
     this.mem_size       = get_field_value(subtask_div, this.info_translation, this.info_resolution, "mem_size");
     this.earliest_start = get_field_value(subtask_div, this.info_translation, this.info_resolution, "earliest_start");
+    for(var i = 0; i < this.dependency_list.length; i++) {
+      this.dependency_list[i][0].set_state(this.dependency_list[i][1]);
+    }
+
+    for(var i = 0; i < this.coreaffinity_list.length; i++) {
+      this.coreaffinity_list[i][0].set_state(this.coreaffinity_list[i][1]);
+    }
 
   }
 
@@ -472,8 +496,8 @@ class SubTask {
     this.parent_task_id = id;
   }
 
-  set_dependency_div(depdendency_div) {
-    this.dependency_list_div = depdendency_div;
+  set_dependency_div(dependency_div) {
+    this.dependency_list_div = dependency_div;
   }
 
   set_coreaffinity_div(coreaffinity_div) {
@@ -482,10 +506,12 @@ class SubTask {
 
   add_coreaffinity_list(coreaffinity_list) {
     for(var i = 0; i < coreaffinity_list.core_list.length; i++) {
+      var new_coreaffinity = new CoreAffinity();
+      new_coreaffinity.set_core_id(coreaffinity_list.core_list[i][0].core_id);
       this.resolution_table[0][1] = this.subtask_id;
       this.resolution_table[1][1] = this.parent_task_id;
       this.resolution_table[3][1] = coreaffinity_list.core_list[i][0].core_id;
-      add_element(this.coreaffinity_list_div, this.coreaffinity_list, new CoreAffinity(), this.coreaffinity_html_template, this.translation, i, this.resolution_table);
+      add_element(this.coreaffinity_list_div, this.coreaffinity_list, new_coreaffinity, this.coreaffinity_html_template, this.translation, i, this.resolution_table);
     }
   }
 
@@ -497,16 +523,18 @@ class SubTask {
   add_all_dependencies(last_subtask) {
     for(var i = 0; i < last_subtask; i++) {
       if(i != this.subtask_id) {
+        var new_dep = new Dependency();
+        new_dep.set_subtask_id(i);
         this.resolution_table[0][1] = this.subtask_id;
         this.resolution_table[1][1] = this.parent_task_id;
         this.resolution_table[2][1] = i;
-        add_element(this.dependency_list_div, this.dependency_list, new Dependency() , this.dependency_html_template, this.translation, i, this.resolution_table);
+        add_element(this.dependency_list_div, this.dependency_list, new_dep , this.dependency_html_template, this.translation, i, this.resolution_table);
       }
     }
   }
 
   generate_subtask_json() {
-    var json = '"SubtaskName": "' + this.subtask_name + '","SubtaskDeadline": "' + this.deadline + '","SubtaskMemory":"' + this.mem_size + '","SubtaskExecTime":"' + this.execution_time + '", "EarliestStart": "' + this.earliest_start + '","DependencyList":[';
+    var json = '"SubtaskName": "' + this.subtask_name + '","SubtaskDeadline": "' + this.deadline + '","SubtaskMemory":"' + this.mem_size + '","SubtaskExecTime":"' + this.execution_time + '", "SubtaskEarliestStart": "' + this.earliest_start + '","DependencyList":[';
     for(var i = 0; i < this.dependency_list.length; i++) {
       if(this.dependency_list[i][1].is(":checked")) {
         json = json + '"' + this.dependency_list[i][1].data("index") + '"';
@@ -531,10 +559,12 @@ class SubTask {
   }
 
   update_new_dependencies(last_subtask) {
+    var new_dep = new Dependency();
+    new_dep.set_subtask_id(last_subtask);
     this.resolution_table[0][1] = this.subtask_id;
     this.resolution_table[1][1] = this.parent_task_id;
     this.resolution_table[2][1] = last_subtask;
-    add_element(this.dependency_list_div, this.dependency_list, new Dependency() , this.dependency_html_template, this.translation, this.dependency_list.length, this.resolution_table);
+    add_element(this.dependency_list_div, this.dependency_list, new_dep , this.dependency_html_template, this.translation, this.dependency_list.length, this.resolution_table);
   }
 
   load_json(subtask_json, coreaffinity_list) {
@@ -555,11 +585,13 @@ class SubTask {
     if(subtask_json.CoreList.length != 0) {
       for(var i = 0; i < this.coreaffinity_list.length; i++) {
         this.coreaffinity_list[i][1].prop('checked', false);
+        this.coreaffinity_list[i][0].set_state(this.coreaffinity_list[i][1]);
       }
 
       for(var i = 0; i < subtask_json.CoreList.length; i++) {
         var coreaffinity_id = parseInt(subtask_json.CoreList[i]);
         this.coreaffinity_list[coreaffinity_id][1].prop('checked', true);
+        this.coreaffinity_list[coreaffinity_id][0].set_state(this.coreaffinity_list[coreaffinity_id][1]);
       }
     }
   }
@@ -571,6 +603,7 @@ class SubTask {
         dep_id = dep_id - 1;
       }
       this.dependency_list[dep_id][1].prop('checked',true);
+      this.dependency_list[dep_id][0].set_state(this.dependency_list[dep_id][1]);
     }
   }
 
@@ -580,20 +613,39 @@ class SubTask {
 class Dependency {
   constructor() {
     this.dependency_id = 0;
+    this.subtask_id = 0;
+    this.dependency_state = false;
   }
 
   set_id(id) {
-    this.depdendency_id = id;
+    this.dependency_id = id;
+  }
+
+  set_state(dependency_div) {
+    this.dependency_state = dependency_div.prop('checked');
+  }
+
+  set_subtask_id(subtask_id) {
+    this.subtask_id = subtask_id;
   }
 }
 
 class CoreAffinity {
   constructor() {
     this.coreaffinity_id = 0;
+    this.core_id = 0;
+    this.coreaffinity_state = false;
   }
 
   set_id(id) {
     this.coreaffinity_id = id;
+  }
+
+  set_state(coreaffinity_div) {
+    this.coreaffinity_state = coreaffinity_div.prop('checked');
+  }
+  set_core_id(core_id) {
+    this.core_id = core_id;
   }
 }
 
@@ -669,6 +721,236 @@ class Scheduler {
       this.hide_json_load();
     }
   }
+
+  draw_schedule(canvas_name) {
+    var stage = new createjs.Stage(canvas_name);
+    var rectangle = new createjs.Shape();
+    rectangle.graphics.beginFill("DeepSkyBlue").drawRect(0,0,100,50);
+    rectangle.x = 100;
+    rectangle.y = 100;
+    stage.addChild(rectangle);
+    stage.update();
+  }
+
+  build_dependency_tree() {
+    // Separate Trees for each Task
+    // Look for independent subtask in each task
+    // Connect to each task that depends on it
+    // More Graph than Tree
+    var json_str = this.generate_schedule_json();
+    this.create_adj_list(json_str);
+  }
+
+  solve_dependency_tree() {
+    // Requires exponential time solution, however dependencies should reduce search space significantly
+    // In general job with earlier deadline is higher priority
+    // if not enough cores are available, higher priority job will be scheduled. Each combination of
+    // job, core combination needs to be tried for the ready jobs
+    // A job is ready when all its dependencies are completed
+    // The output looks like a list of all possible workable schedules
+    // Output will contain a list per core of the job scheduled and the timestamp of the schedule
+
+    // Create a ready list of subtasks, starting with independent subtasks
+    var ready_list = [];
+    for(var i = 0; i < this.indep_subtasks.length; i++) {
+      for(var j = 0; j < this.indep_subtasks[i].length; j++) {
+        ready_list.push(this.indep_subtasks[i][j]);
+      }
+    }
+
+    var waiting_list = [];
+    for(var i = 0; i < this.dep_subtasks.length; i++) {
+      for(var j = 0; j < this.dep_subtasks[i].length; j++) {
+        waiting_list.push(this.dep_subtasks[i][j]);
+      }
+    }
+
+
+    // Create output structure, a list per core of job scheduled and timestamp
+    var sched_list = new Array(this.corelist.core_list.length);
+    var core_state = new Array(this.corelist.core_list.length);
+    var current_time = 0;
+    var earliest_cores_busy_till = Number.MAX_SAFE_INTEGER;
+
+    for(var i = 0; i < core_state.length; i++) {
+      core_state[i] = [];
+      core_state[i]['in_use'] = false;
+      core_state[i]['busy_till'] = 0;
+      core_state[i]['job'] = null;
+
+      sched_list[i] = [];
+      sched_list[i]['job'] = null;
+      sched_list[i]['current_time'] = 0;
+    }
+
+    // Create a first dummy schedule
+    while(waiting_list.length > 0 || ready_list.length > 0) {
+      var job_to_schedule = null;
+      var core_to_use = null;
+      var found = false;
+      var list_index_to_splice = 0;
+      var earliest_time_across_jobs = Number.MAX_SAFE_INTEGER;
+      //Search for next job to schedule
+      for(var i = 0; i < ready_list.length; i++) {
+        var job = ready_list[i];
+        //Run this job on first core in its coreaffinity list if it is free, else go to next one and try again
+        for(var j = 0; j < this.graph.TaskList[job.task].SubtaskList[job.subtask].CoreList.length; j++) {
+          var preferred_core = parseInt(this.graph.TaskList[job.task].SubtaskList[job.subtask].CoreList[j]);
+          var earliest_start = parseInt(this.graph.TaskList[job.task].SubtaskList[job.subtask].SubtaskEarliestStart);
+
+          earliest_time_across_jobs = Math.min(earliest_start, earliest_time_across_jobs);
+          console.log('Prefered core ' + preferred_core);
+
+          if( (core_state[preferred_core]['in_use'] == false ) && (earliest_start <= current_time)) {
+            job_to_schedule = job;
+            core_to_use = preferred_core;
+            found = true;
+            list_index_to_splice = i;
+            break;
+          }
+        }
+
+        if(found == true) {
+          break;
+        }
+      }
+
+      // Insert the job into the sched list and mark the core as busy
+      // If no job could be scheduled then advance the time and see if
+      // any cores become free
+
+      if(found == true) {
+        var sched_update = [];
+        sched_update['job'] = job_to_schedule;
+        sched_update['current_time'] = current_time;
+        sched_list[core_to_use].push(sched_update);
+        core_state[core_to_use]['in_use'] = true;
+        core_state[core_to_use]['busy_till'] = current_time + parseInt(this.graph.TaskList[job_to_schedule.task].SubtaskList[job_to_schedule.subtask].SubtaskExecTime);
+        core_state[core_to_use]['job'] = job_to_schedule;
+        earliest_cores_busy_till = Math.min(core_state[core_to_use]['busy_till'] , earliest_cores_busy_till);
+        ready_list.splice(list_index_to_splice, 1);
+
+        console.log("Job scheduled : ");
+        console.log(job_to_schedule);
+      }
+      else {
+        // Move current time forward and update the core states accordingly
+        if(earliest_cores_busy_till != Number.MAX_SAFE_INTEGER) {
+          current_time = earliest_cores_busy_till;
+          earliest_cores_busy_till = Number.MAX_SAFE_INTEGER;
+
+          // Update state of the cores that have completed processing and add new jobs to the ready list.
+          for(var core_id = 0; core_id < core_state.length; core_id++) {
+            if((current_time >= core_state[core_id]['busy_till']) && (core_state[core_id]['in_use'] == true)) {
+              core_state[core_id]['in_use'] = false;
+              var task_id = core_state[core_id]['job']['task'];
+              var subtask_id = core_state[core_id]['job']['subtask'];
+              var adj_list = this.adj_lists[task_id];
+              for(var adj_id = 0; adj_id < adj_list.length; adj_id++) {
+                if(adj_list[adj_id][subtask_id] == 1) {
+                  //Need mechanism to check that all dependencies are satisfied TODO. for now just assume single dep
+                  var st_list_obj = [];
+                  st_list_obj['task'] = task_id;
+                  st_list_obj['subtask'] = adj_id;
+                  ready_list.push(st_list_obj);
+
+                  for(var wl_id = 0; wl_id < waiting_list.length; wl_id++) {
+                    if((waiting_list[wl_id]['task'] == task_id) && (waiting_list[wl_id]['subtask'] == adj_id)) {
+                      waiting_list.splice(wl_id , 1);
+                      break;
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        else if(earliest_time_across_jobs != Number.MAX_SAFE_INTEGER) {
+          current_time = earliest_time_across_jobs;
+          earliest_time_across_jobs = Number.MAX_SAFE_INTEGER;
+        }
+        else {
+          console.assert(0, "Schedule Failed");
+          return;
+        }
+
+      }
+
+    }
+
+    console.log(sched_list);
+    this.sched_list = sched_list;
+
+  }
+  create_adj_list(graph_json_str) {
+    var graph_json = JSON.parse(graph_json_str);
+
+    this.adj_lists = [];
+    this.indep_subtasks = [];
+    this.dep_subtasks = [];
+    for(var i = 0; i < graph_json.TaskList.length; i++) {
+
+      //Create storage for Adj List
+      var this_task = graph_json.TaskList[i];
+      var thisList = new Array(this_task.SubtaskList.length);
+      var thisIndepSubtaskList = [];
+      var thisDepSubtaskList = [];
+      for(var j = 0; j < thisList.length; j++) {
+        thisList[j] = new Array(thisList.length);
+      }
+
+      //Start filling Adj list
+      for(var j = 0; j < thisList.length; j++) {
+        if(this_task.SubtaskList[j].DependencyList.length == 0 ) {
+          var st_list_obj = [];
+          st_list_obj['task'] = i;
+          st_list_obj['subtask'] = j;
+          thisIndepSubtaskList.push(st_list_obj);
+        }
+        else {
+          var st_list_obj = [];
+          st_list_obj['task'] = i;
+          st_list_obj['subtask'] = j;
+          thisDepSubtaskList.push(st_list_obj);
+
+        }
+        for(var k = 0; k < thisList.length; k++) {
+          thisList[j][k] = 0;
+          if( j != k ) {
+            for(var l = 0; l < this_task.SubtaskList[j].DependencyList.length; l++) {
+              if (k == this_task.SubtaskList[j].DependencyList[l] ) {
+                thisList[j][k] = 1;
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      this.adj_lists.push(thisList);
+      this.indep_subtasks.push(thisIndepSubtaskList);
+      this.dep_subtasks.push(thisDepSubtaskList);
+    }
+    this.graph = graph_json;
+    console.log(this.adj_lists);
+    console.log(this.indep_subtasks);
+  }
+
+  add_repeat_tasks() {
+    //TODO : Add additional tasks for repetition : Basically the task with longest deadline should run 3 times and the other tasks should repeat until the end of the last deadline of the task with the longest deadline
+  }
+
+  assign_task_priorities() {
+    //TODO : Assign priorities based on deadlines. The further the deadline, the lower the priority of the task. WIthin the task the subtasks should be assigned priority such that the independent tasks have the lower priority and each dependent task has one level higher priority than it's predecessors
+  }
+
+  create_schedule(canvas_obj) {
+    this.add_repeat_tasks();
+    this.assign_task_priorities();
+    this.build_dependency_tree();
+    this.solve_dependency_tree();
+    this.draw_schedule(canvas_obj);
+  }
 }
 
 var scheduler;
@@ -678,7 +960,7 @@ function init()
   scheduler = new Scheduler();
 
   $("#update").on("click", function(e) {
-    scheduler.generate_schedule_json();
+    scheduler.create_schedule('mycanvas');
   });
 
   $("#show_json").on("click", function(e) {
