@@ -722,7 +722,48 @@ class Scheduler {
     }
   }
 
-  draw_schedule(canvas_name) {
+  draw_schedule(sched_result, prio_json) {
+    var container = document.getElementById('right');
+    var chart = new google.visualization.Timeline(container);
+    var dataTable = new google.visualization.DataTable();
+
+    dataTable.addColumn({type: 'string', id:'Core id'});
+    dataTable.addColumn({type: 'string', id:'Task name'});
+    dataTable.addColumn({type: 'date', id:'Start'});
+    dataTable.addColumn({type: 'date', id:'End'});
+
+    for (var core_id = 0; core_id < sched_result.length; core_id++) {
+      for (var job_id = 0; job_id < sched_result[core_id].length; job_id++) {
+
+        var task_name = prio_json.TaskList[sched_result[core_id][job_id].job['task']].TaskName;
+        var subtask_name = prio_json.TaskList[sched_result[core_id][job_id].job['task']].SubtaskList[sched_result[core_id][job_id].job['subtask']].SubtaskName;
+        var core_name = prio_json.CoreList[core_id].CoreName;
+        var data_row = [core_name , task_name + ":" + subtask_name, new Date(parseInt(sched_result[core_id][job_id].current_time)), new Date(parseInt(sched_result[core_id][job_id].current_time + sched_result[core_id][job_id].job['time_executed'] ))  ];
+        dataTable.addRows([data_row]);
+      }
+    }
+
+/*
+    dataTable.addRows([
+      ['Core 0', new Date(0), new Date(100)],
+      ['Core 0', new Date(100), new Date(120)],
+      ['Core 0', new Date(120), new Date(160)],
+      ['Core 0', new Date(180), new Date(220)],
+      ['Core 0', new Date(230), new Date(250)],
+      ['Core 1', new Date(0), new Date(50)],
+      ['Core 1', new Date(50), new Date(150)],
+      ['Core 1', new Date(150), new Date(230)],
+      ['Core 1', new Date(250), new Date(330)]
+    ]);*/
+    var options = {
+      height:500,
+      width:4000
+      };
+    chart.draw(dataTable, options);
+  }
+
+  load_charts_and_draw(sched_result, priority_assigned_json) {
+    /*
     var stage = new createjs.Stage(canvas_name);
     var rectangle = new createjs.Shape();
     rectangle.graphics.beginFill("DeepSkyBlue").drawRect(0,0,100,50);
@@ -730,18 +771,19 @@ class Scheduler {
     rectangle.y = 100;
     stage.addChild(rectangle);
     stage.update();
+    */
+   this.draw_schedule(sched_result, priority_assigned_json);
   }
 
-  build_dependency_tree() {
+  build_dependency_tree(json) {
     // Separate Trees for each Task
     // Look for independent subtask in each task
     // Connect to each task that depends on it
     // More Graph than Tree
-    var json_str = this.generate_schedule_json();
-    this.create_adj_list(json_str);
+    return this.create_adj_list(json);
   }
 
-  solve_dependency_tree() {
+  solve_dependency_tree(prio_json, adj_list_obj) {
     // Requires exponential time solution, however dependencies should reduce search space significantly
     // In general job with earlier deadline is higher priority
     // if not enough cores are available, higher priority job will be scheduled. Each combination of
@@ -752,23 +794,25 @@ class Scheduler {
 
     // Create a ready list of subtasks, starting with independent subtasks
     var ready_list = [];
-    for(var i = 0; i < this.indep_subtasks.length; i++) {
-      for(var j = 0; j < this.indep_subtasks[i].length; j++) {
-        ready_list.push(this.indep_subtasks[i][j]);
+    for(var i = 0; i < adj_list_obj.indep_subtasks.length; i++) {
+      for(var j = 0; j < adj_list_obj.indep_subtasks[i].length; j++) {
+        adj_list_obj.indep_subtasks[i][j].time_executed = 0;
+        ready_list.push(adj_list_obj.indep_subtasks[i][j]);
       }
     }
 
     var waiting_list = [];
-    for(var i = 0; i < this.dep_subtasks.length; i++) {
-      for(var j = 0; j < this.dep_subtasks[i].length; j++) {
-        waiting_list.push(this.dep_subtasks[i][j]);
+    for(var i = 0; i < adj_list_obj.dep_subtasks.length; i++) {
+      for(var j = 0; j < adj_list_obj.dep_subtasks[i].length; j++) {
+        adj_list_obj.dep_subtasks[i][j].time_executed = 0;
+        waiting_list.push(adj_list_obj.dep_subtasks[i][j]);
       }
     }
 
 
     // Create output structure, a list per core of job scheduled and timestamp
-    var sched_list = new Array(this.corelist.core_list.length);
-    var core_state = new Array(this.corelist.core_list.length);
+    var sched_list = new Array(prio_json.CoreList.length);
+    var core_state = new Array(prio_json.CoreList.length);
     var current_time = 0;
     var earliest_cores_busy_till = Number.MAX_SAFE_INTEGER;
 
@@ -776,11 +820,12 @@ class Scheduler {
       core_state[i] = [];
       core_state[i]['in_use'] = false;
       core_state[i]['busy_till'] = 0;
+      core_state[i]['last_scheduled_at'] = 0;
       core_state[i]['job'] = null;
 
       sched_list[i] = [];
-      sched_list[i]['job'] = null;
-      sched_list[i]['current_time'] = 0;
+//      sched_list[i]['job'] = null;
+//      sched_list[i]['current_time'] = 0;
     }
 
     // Create a first dummy schedule
@@ -789,24 +834,41 @@ class Scheduler {
       var core_to_use = null;
       var found = false;
       var list_index_to_splice = 0;
+      var job_to_unschedule = -1;
+      var unsched_job_runtime = 0;
       var earliest_time_across_jobs = Number.MAX_SAFE_INTEGER;
       //Search for next job to schedule
       for(var i = 0; i < ready_list.length; i++) {
         var job = ready_list[i];
         //Run this job on first core in its coreaffinity list if it is free, else go to next one and try again
-        for(var j = 0; j < this.graph.TaskList[job.task].SubtaskList[job.subtask].CoreList.length; j++) {
-          var preferred_core = parseInt(this.graph.TaskList[job.task].SubtaskList[job.subtask].CoreList[j]);
-          var earliest_start = parseInt(this.graph.TaskList[job.task].SubtaskList[job.subtask].SubtaskEarliestStart);
+        for(var j = 0; j < prio_json.TaskList[job.task].SubtaskList[job.subtask].CoreList.length; j++) {
+          var preferred_core = parseInt(prio_json.TaskList[job.task].SubtaskList[job.subtask].CoreList[j]);
+          var earliest_start = parseInt(prio_json.TaskList[job.task].SubtaskList[job.subtask].SubtaskEarliestStart);
 
           earliest_time_across_jobs = Math.min(earliest_start, earliest_time_across_jobs);
           console.log('Prefered core ' + preferred_core);
 
-          if( (core_state[preferred_core]['in_use'] == false ) && (earliest_start <= current_time)) {
-            job_to_schedule = job;
-            core_to_use = preferred_core;
-            found = true;
-            list_index_to_splice = i;
-            break;
+          var current_job_on_core = core_state[preferred_core]['job'];
+
+          if(earliest_start <= current_time) {
+            if( core_state[preferred_core]['in_use'] == false ) {
+              job_to_schedule = job;
+              core_to_use = preferred_core;
+              found = true;
+              list_index_to_splice = i;
+              break;
+            }
+            //If the current task on the preferred core is lower priority, then replace it with the new task
+            else if(prio_json.TaskList[job.task].SubtaskList[job.subtask].SubtaskPriority > prio_json.TaskList[current_job_on_core.task].SubtaskList[current_job_on_core.subtask].SubtaskPriority) {
+              job_to_schedule = job;
+              core_to_use = preferred_core;
+              found = true;
+              list_index_to_splice = i;
+              job_to_unschedule = current_job_on_core;
+              unsched_job_runtime = current_job_on_core.time_executed + current_time - core_state[preferred_core]['last_scheduled_at'];
+              break;
+
+            }
           }
         }
 
@@ -825,13 +887,20 @@ class Scheduler {
         sched_update['current_time'] = current_time;
         sched_list[core_to_use].push(sched_update);
         core_state[core_to_use]['in_use'] = true;
-        core_state[core_to_use]['busy_till'] = current_time + parseInt(this.graph.TaskList[job_to_schedule.task].SubtaskList[job_to_schedule.subtask].SubtaskExecTime);
+        var exec_time_us = (parseInt(prio_json.TaskList[job_to_schedule.task].SubtaskList[job_to_schedule.subtask].SubtaskExecTime) - job_to_schedule.time_executed )/parseFloat(prio_json.CoreList[core_to_use].CoreFreq);
+        core_state[core_to_use]['busy_till'] = current_time + exec_time_us;
         core_state[core_to_use]['job'] = job_to_schedule;
+        core_state[core_to_use]['last_scheduled_at'] = current_time;
         earliest_cores_busy_till = Math.min(core_state[core_to_use]['busy_till'] , earliest_cores_busy_till);
         ready_list.splice(list_index_to_splice, 1);
+        if (job_to_unschedule != -1) {
+          job_to_unschedule.time_executed = unsched_job_runtime;
+          ready_list.push(job_to_unschedule);
+        }
 
         console.log("Job scheduled : ");
         console.log(job_to_schedule);
+        console.log("Core busy till : ",earliest_cores_busy_till);
       }
       else {
         // Move current time forward and update the core states accordingly
@@ -841,17 +910,21 @@ class Scheduler {
 
           // Update state of the cores that have completed processing and add new jobs to the ready list.
           for(var core_id = 0; core_id < core_state.length; core_id++) {
-            if((current_time >= core_state[core_id]['busy_till']) && (core_state[core_id]['in_use'] == true)) {
+            if(((current_time + 0.001) >= core_state[core_id]['busy_till']) && (core_state[core_id]['in_use'] == true)) {
+
+              sched_list[core_id][sched_list[core_id].length - 1].job.time_executed = current_time - sched_list[core_id][sched_list[core_id].length - 1].current_time;
+
               core_state[core_id]['in_use'] = false;
               var task_id = core_state[core_id]['job']['task'];
               var subtask_id = core_state[core_id]['job']['subtask'];
-              var adj_list = this.adj_lists[task_id];
+              var adj_list = adj_list_obj.adj_lists[task_id];
               for(var adj_id = 0; adj_id < adj_list.length; adj_id++) {
                 if(adj_list[adj_id][subtask_id] == 1) {
                   //Need mechanism to check that all dependencies are satisfied TODO. for now just assume single dep
                   var st_list_obj = [];
                   st_list_obj['task'] = task_id;
                   st_list_obj['subtask'] = adj_id;
+                  st_list_obj['time_executed'] = 0;
                   ready_list.push(st_list_obj);
 
                   for(var wl_id = 0; wl_id < waiting_list.length; wl_id++) {
@@ -863,10 +936,13 @@ class Scheduler {
                 }
               }
             }
+            else if(core_state[core_id]['in_use'] == true) {
+              earliest_cores_busy_till = Math.min(earliest_cores_busy_till, core_state[core_id]['busy_till']);
+            }
           }
         }
         else if(earliest_time_across_jobs != Number.MAX_SAFE_INTEGER) {
-          current_time = earliest_time_across_jobs;
+          current_time = Math.max(current_time, earliest_time_across_jobs);
           earliest_time_across_jobs = Number.MAX_SAFE_INTEGER;
         }
         else {
@@ -879,15 +955,15 @@ class Scheduler {
     }
 
     console.log(sched_list);
-    this.sched_list = sched_list;
+    return sched_list;
 
   }
-  create_adj_list(graph_json_str) {
-    var graph_json = JSON.parse(graph_json_str);
+  create_adj_list(graph_json) {
 
-    this.adj_lists = [];
-    this.indep_subtasks = [];
-    this.dep_subtasks = [];
+    var adj_list_obj = [];
+    adj_list_obj.adj_lists = [];
+    adj_list_obj.indep_subtasks = [];
+    adj_list_obj.dep_subtasks = [];
     for(var i = 0; i < graph_json.TaskList.length; i++) {
 
       //Create storage for Adj List
@@ -927,38 +1003,123 @@ class Scheduler {
         }
       }
 
-      this.adj_lists.push(thisList);
-      this.indep_subtasks.push(thisIndepSubtaskList);
-      this.dep_subtasks.push(thisDepSubtaskList);
+      adj_list_obj.adj_lists.push(thisList);
+      adj_list_obj.indep_subtasks.push(thisIndepSubtaskList);
+      adj_list_obj.dep_subtasks.push(thisDepSubtaskList);
     }
-    this.graph = graph_json;
-    console.log(this.adj_lists);
-    console.log(this.indep_subtasks);
+    console.log(adj_list_obj);
+    return adj_list_obj;
   }
 
-  add_repeat_tasks() {
+  add_repeat_tasks(json) {
     //TODO : Add additional tasks for repetition : Basically the task with longest deadline should run 3 times and the other tasks should repeat until the end of the last deadline of the task with the longest deadline
+    //
+    //Find task with highest period
+    var max_period = json.TaskList[0].TaskPeriod;
+    var max_period_id = 0;
+    for(var i = 0; i < json.TaskList.length; i++) {
+      //TODO : Ideally this should come from the start time of the earliest subtask.
+      json.TaskList[i].StartTime = 0;
+      json.TaskList[i].TaskId = i;
+      if(max_period < json.TaskList[i].TaskPeriod) {
+        max_period = json.TaskList[i].TaskPeriod;
+        max_period_id = i;
+      }
+      for(var j = 0; j < json.TaskList[i].SubtaskList.length; j++ ) {
+        json.TaskList[i].SubtaskList[j].SubtaskId = j;
+      }
+    }
+
+    //Add 3 more of the longest task and then accordingly additional for the rest
+    var num_repeats_to_add = 2;
+    var period_for_repeats = max_period * num_repeats_to_add;
+
+    //Add additional tasks for each task, but change the subtask earliers start time by the task period times the index of the dummy task
+    var orig_task_list_len = json.TaskList.length;
+    for(var i = 0; i < orig_task_list_len; i++) {
+      var num_repeats = (parseInt(period_for_repeats) + parseInt(json.TaskList[i].TaskPeriod) - 1)/parseInt(json.TaskList[i].TaskPeriod);
+      console.log(period_for_repeats + ": " + json.TaskList[i].TaskPeriod);
+      console.log(num_repeats);
+      for(var j = 0; j < num_repeats; j++) {
+        // JSON method of deep cloning an object
+        var task = JSON.parse(JSON.stringify(json.TaskList[i]));
+        task.TaskName += '_r' + j.toString();
+        task.StartTime = task.StartTime + ((j+1) * parseInt(json.TaskList[i].TaskPeriod));
+        for(var k = 0; k < task.SubtaskList.length; k++) {
+          task.SubtaskList[k].SubtaskName += '_r' + j.toString();
+          task.SubtaskList[k].SubtaskEarliestStart = parseInt(task.SubtaskList[k].SubtaskEarliestStart) + parseInt(task.TaskPeriod) * (j + 1);
+        }
+        task.TaskId = json.TaskList.length;
+        json.TaskList.push(task);
+      }
+    }
+    return json;
   }
 
-  assign_task_priorities() {
+  sort_by_deadline(json) {
+    json.TaskList = json.TaskList.sort(function(task1, task2) { return (parseInt(task1.StartTime) + parseInt(task1.TaskPeriod)) - (parseInt(task2.StartTime) + parseInt(task2.TaskPeriod));  } );
+    console.log(json);
+    return json;
+  }
+
+  assign_task_priorities_helper(json, adj_list_obj, task_id, subtask_id) {
+    // The adjacency list is in order of the task ids in the TaskList
+    console.log(task_id);
+    for(var dep_subtask_id = 0; dep_subtask_id < adj_list_obj.adj_lists[task_id][subtask_id].length; dep_subtask_id++) {
+      if(dep_subtask_id != subtask_id) {
+        if(adj_list_obj.adj_lists[task_id][dep_subtask_id][subtask_id] == 1) {
+          json.TaskList[task_id].SubtaskList[dep_subtask_id].SubtaskPriority = Math.max(json.TaskList[task_id].SubtaskList[dep_subtask_id].SubtaskPriority, json.TaskList[task_id].SubtaskList[subtask_id].SubtaskPriority + 1);
+          this.assign_task_priorities_helper(json, adj_list_obj, task_id, dep_subtask_id);
+        }
+      }
+    }
+  }
+
+  assign_task_priorities(json, adj_list_obj) {
     //TODO : Assign priorities based on deadlines. The further the deadline, the lower the priority of the task. WIthin the task the subtasks should be assigned priority such that the independent tasks have the lower priority and each dependent task has one level higher priority than it's predecessors
+    // Sort tasks based on their deadlines then within each task sort them based on their dependency
+
+    // Initialize all subtask priorities to 0 first
+    for(var task_id = 0; task_id < json.TaskList.length; task_id++) {
+      for(var subtask_id = 0; subtask_id < json.TaskList[task_id].SubtaskList.length; subtask_id++) {
+        json.TaskList[task_id].SubtaskList[subtask_id].SubtaskPriority = 0;
+      }
+    }
+
+    // Starting from independent tasks assign priorities to the rest
+    for(var i = 0; i < adj_list_obj.indep_subtasks.length; i++) {
+      for(var j = 0; j < adj_list_obj.indep_subtasks[i].length; j++) {
+        var task_id = adj_list_obj.indep_subtasks[i][j]['task'];
+        var subtask_id = adj_list_obj.indep_subtasks[i][j]['subtask'];
+
+        this.assign_task_priorities_helper(json, adj_list_obj, task_id, subtask_id);
+      }
+
+    }
+
+    console.log(json);
+
+
+    return json;
+
   }
 
   create_schedule(canvas_obj) {
-    this.add_repeat_tasks();
-    this.assign_task_priorities();
-    this.build_dependency_tree();
-    this.solve_dependency_tree();
-    this.draw_schedule(canvas_obj);
+    var json_str = this.generate_schedule_json();
+    var original_json = JSON.parse(json_str);
+    var repeat_task_json = this.add_repeat_tasks(original_json);
+    var sort_repeat_task_json = this.sort_by_deadline(repeat_task_json);
+    var adj_list_obj = this.build_dependency_tree(sort_repeat_task_json);
+    var priority_assigned_json = this.assign_task_priorities(repeat_task_json, adj_list_obj);
+    var sched_result = this.solve_dependency_tree(priority_assigned_json, adj_list_obj);
+    this.load_charts_and_draw(sched_result, priority_assigned_json);
   }
 }
 
-var scheduler;
-
+var scheduler
 function init()
 {
   scheduler = new Scheduler();
-
   $("#update").on("click", function(e) {
     scheduler.create_schedule('mycanvas');
   });
