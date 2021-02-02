@@ -1,7 +1,7 @@
-#left {
+#data_div {
   display:block;
   float:left;
-  width:900px;
+  width:100%;
   border-style:solid;
   border-width:1px;
   border-color:black;
@@ -9,10 +9,12 @@
   padding:20px 0px 0px 0px;
 }
 
-#right {
+#timeline_div {
   display:block;
   float:left;
-  width:1000px;
+  width:100%;
+  min-height:500px;
+  background-color:#000000;
 }
 
 #mycanvas {
@@ -175,3 +177,29 @@ code {
   font-size: 105%;
   white-space: pre-wrap;
 }
+
+.vis-item.timeline_item {
+  height:200px;
+  border-radius: 10px !important;
+  padding:10px !important;
+}
+
+.vis-time-axis .vis-text {
+  color:white !important;
+}
+
+.vis-labelset .vis-label {
+  color:white !important;
+}
+
+.vis-item {
+  color:yellow !important;
+  background-color:maroon !important;
+  border-color:red !important;
+}
+
+.timeline_item_content {
+  display:table-cell;
+  vertical-align:middle;
+}
+

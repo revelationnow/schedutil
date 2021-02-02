@@ -723,6 +723,69 @@ class Scheduler {
   }
 
   draw_schedule(sched_result, prio_json) {
+
+    var cores = new vis.DataSet();
+    for(var i = 0; i < prio_json.CoreList.length; i++) {
+      cores.add({id: i,
+                 content:prio_json.CoreList[i].CoreName,
+                 value:i});
+    }
+
+    var sched_data_vis = new vis.DataSet();
+    var item_id = 0;
+    for(var core_id = 0; core_id < sched_result.length; core_id++) {
+      for(var job_id = 0; job_id < sched_result[core_id].length; job_id++) {
+        var task_name = prio_json.TaskList[sched_result[core_id][job_id].job['task']].TaskName;
+        var subtask_name = prio_json.TaskList[sched_result[core_id][job_id].job['task']].SubtaskList[sched_result[core_id][job_id].job['subtask']].SubtaskName;
+
+
+        var item_row = {id      : item_id,
+                        group   : core_id,
+                        content : '<span class="timeline_item_content">' + task_name + " : " + subtask_name + '</span>',
+          title   : "Task : " + task_name + "<br>Subtask : " + subtask_name + "<br>Start (us) :" + parseInt(sched_result[core_id][job_id].current_time).toString() + "<br>End (us): " + parseInt(sched_result[core_id][job_id].current_time + sched_result[core_id][job_id].job['time_executed']).toString(),
+                        start   : new Date(parseInt(sched_result[core_id][job_id].current_time)),
+                        end     : new Date(parseInt(sched_result[core_id][job_id].current_time + sched_result[core_id][job_id].job['time_executed'] )),
+                        className  : 'timeline_item',
+                        type:'range'
+                       };
+
+        sched_data_vis.add(item_row);
+        item_id = item_id + 1;
+      }
+    }
+
+
+    var container = document.getElementById('timeline_div');
+    $('#timeline_div').empty();
+    var timeline = new vis.Timeline(container);
+    var options = {
+      stack:false,
+      height:'500px',
+      start:new Date(0),
+      min: new Date(0),
+      end: new Date(500),
+      snap: null
+
+    };
+    timeline.setOptions(options);
+    timeline.setGroups(cores);
+    timeline.setItems(sched_data_vis);
+    var num_marker_slots = 20;
+    for(var i = 0; i < num_marker_slots; i++) {
+      timeline.addCustomTime(new Date(125 * i),i);
+      timeline.setCustomTimeMarker((125 * i).toString(),i);
+      timeline.customTimes[timeline.customTimes.length - 1].hammer.off("panstart panmove panend");
+    }
+    timeline.addCustomTime(new Date(60),num_marker_slots);
+    timeline.setCustomTimeMarker("Move me!",num_marker_slots);
+    timeline.on("timechange", function(properties) {
+      console.log(properties.time.getTime());
+      timeline.setCustomTimeTitle(properties.time.getTime() , properties.id);
+      timeline.customTimes[num_marker_slots].bar.innerHTML = '<div style=\"position: relative; top: 0px; left: -10px; height: 100%; width: 20px; touch-action: none; user-select: none;\"></div><div class=\"vis-custom-time-marker\" style=\"position: absolute;\">'  + properties.time.getTime().toString() + '</div>';
+    });
+
+
+    /*
     var container = document.getElementById('right');
     var chart = new google.visualization.Timeline(container);
     var dataTable = new google.visualization.DataTable();
@@ -742,6 +805,7 @@ class Scheduler {
         dataTable.addRows([data_row]);
       }
     }
+    */
 
 /*
     dataTable.addRows([
@@ -755,11 +819,14 @@ class Scheduler {
       ['Core 1', new Date(150), new Date(230)],
       ['Core 1', new Date(250), new Date(330)]
     ]);*/
+
+    /*
     var options = {
       height:500,
       width:4000
       };
     chart.draw(dataTable, options);
+    */
   }
 
   load_charts_and_draw(sched_result, priority_assigned_json) {
